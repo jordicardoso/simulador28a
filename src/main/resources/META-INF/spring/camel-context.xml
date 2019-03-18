@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	   xsi:schemaLocation="
+       http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+       http://camel.apache.org/schema/spring http://camel.apache.org/schema/spring/camel-spring.xsd">
+
+	<bean id="splitterUri" class="uriHeader.splitter"/>
+	<bean id="jsonResult" class="jsonResult.totals"/>
+	<bean id="DHondt" class="DHondt.DHondtResults"/>
+	<bean id="arrayVots" class="process.arrayVots"/>
+	<bean id="jsonAggregation" class="aggregation.jsonAggregation"/>
+	<bean id="circunscripcions" class="aggregation.circunscripcions"/>
+	<bean id="esconsCatalunya" class="aggregation.esconsCatalunya"/>
+	<bean id="votsXmunicipi" class="aggregation.jsonAggregation"/>
+	<bean id="getVots" class="firestore.getVots"/>
+	<bean id="putVots" class="firestore.putVots"/>
+
+	<camelContext id="simulador" xmlns="http://camel.apache.org/schema/spring">
+
+		<propertyPlaceholder id="properties" location="classpath:/etc/uri.properties"/>
+
+		<streamCaching id="CacheConfig" bufferSize="100024000" spoolThreshold="100024000"/>
+
+		<dataFormats>
+			<json id="json" library="Jackson"/>
+		</dataFormats>
+
+		<route autoStartup="true" id="getMesesFromElasticsearch">
+			<from uri="timer://foo?repeatCount=1"/>
+			<removeHeaders pattern="CamelHttp*" />
+			<setHeader headerName="CamelHttpMethod"><constant>POST</constant></setHeader>
+			<setHeader headerName="Exchange.CONTENT_TYPE"><simple>application/json; charset=UTF-8</simple></setHeader>
+			<setBody><simple>{"query" : {"match_all" : {}}}</simple></setBody>
+			<toD uri="http4://192.168.99.100:9200/meses/_search?bridgeEndpoint=true&amp;throwExceptionOnFailure=false"/>
+			<split streaming="true" parallelProcessing="true">
+				<jsonpath>$.hits.hits[*]._source</jsonpath>
+				<log message="ready to send: ${body}"/>
+				<to uri="seda:meses"/>
+			</split>
+		</route>
+
+		<route autoStartup="true" id="randomizeVots">
+			<from uri="seda:meses"/>
+			<setHeader headerName="randomJxCAT"><groovy>Math.abs(new Random().nextInt() % 600 + 1)</groovy></setHeader>
+			<setHeader headerName="randomComuns"><groovy>Math.abs(new Random().nextInt() % 600 + 1)</groovy></setHeader>
+			<setHeader headerName="randomPACMA"><groovy>Math.abs(new Random().nextInt() % 600 + 1)</groovy></setHeader>
+			<setHeader headerName="randomPP"><groovy>Math.abs(new Random().nextInt() % 600 + 1)</groovy></setHeader>
+			<setHeader headerName="randomVox"><groovy>Math.abs(new Random().nextInt() % 600 + 1)</groovy></setHeader>
+			<setHeader headerName="randomPSOE"><groovy>Math.abs(new Random().nextInt() % 600 + 1)</groovy></setHeader>
+			<setHeader headerName="randomCiudadanos"><groovy>Math.abs(new Random().nextInt() % 600 + 1)</groovy></setHeader>
+			<setHeader headerName="randomERC"><groovy>Math.abs(new Random().nextInt() % 600 + 1)</groovy></setHeader>
+			<setHeader headerName="municipi"><jsonpath suppressExceptions="true">$.municipi</jsonpath></setHeader>
+			<setHeader headerName="codProv"><jsonpath suppressExceptions="true">$.codProv</jsonpath></setHeader>
+			<setHeader headerName="idMesa"><jsonpath suppressExceptions="true">$.idMesa</jsonpath></setHeader>
+			<setBody>
+				<simple>
+					{
+					"data": "${date:now:yyyy-MM-dd'T'HH:mm:ss:SSS}",
+					"municipi": "${header.municipi}",
+					"codProv": "${header.codProv}",
+					"idUser": "rVQwN4VaJJhxIAgaekTCi1HlQoI2",
+					"idMesa": "${header.idMesa}",
+					"idEleccions": "K92HNeLF7hsBDA1KntKB",
+					"refActa": "",
+					"votsJxCAT": ${header.randomJxCAT},
+					"votsComuns": ${header.randomComuns},
+					"votsPACMA": ${header.randomPACMA},
+					"votsPP": ${header.randomPP},
+					"votsVox": ${header.randomVox},
+					"votsPSOE": ${header.randomPSOE},
+					"votsCiudadanos": ${header.randomCiudadanos},
+					"votsERC": ${header.randomERC}
+					}
+				</simple>
+			</setBody>
+			<unmarshal ref="json"/>
+			<process ref="putVots"/>
+			<log message="${body}"/>
+		</route>
+
+	</camelContext>
+</beans>
