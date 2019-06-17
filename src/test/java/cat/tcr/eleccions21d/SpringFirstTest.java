@@ -25,7 +25,7 @@ public class SpringFirstTest extends CamelSpringTestSupport {
 		context.start();
 
 		MockEndpoint result = getMockEndpoint("mock:result");
-		result.expectedMessageCount(10);
+		result.expectedMessageCount(40);
 
 		assertMockEndpointsSatisfied();
 
